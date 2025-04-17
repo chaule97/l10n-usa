@@ -1,0 +1,406 @@
+import calendar
+from datetime import date, timedelta
+
+from odoo import _, fields, http
+from odoo.exceptions import UserError
+from odoo.http import request
+
+from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
+
+
+class PaymentController(CustomerPortal):
+    def _get_invoices_domain(self):
+        return [
+            ("state", "not in", ("cancel", "draft")),
+            (
+                "move_type",
+                "in",
+                (
+                    "out_invoice",
+                    "out_refund",
+                    "in_invoice",
+                    "in_refund",
+                    "out_receipt",
+                    "in_receipt",
+                ),
+            ),
+        ]
+
+    @http.route(
+        ["/my/payments", "/my/payments/page/<int:page>"],
+        type="http",
+        auth="user",
+        website=True,
+    )
+    def portal_my_payments(
+        self, page=1, sortby=None, filterby=None, search="", search_in="all", **kw
+    ):
+        ScheduledPayment = request.env["account.payment"]
+
+        searchbar_inputs = {
+            "all": {"label": _("All"), "input": "all"},
+            "partner": {"label": _("Amount"), "input": "amount_total"},
+        }
+
+        # -- Filters
+        filter_options = {
+            "all": {"label": _("All"), "domain": []},
+            "future": {
+                "label": _("Upcoming"),
+                "domain": [("scheduled_date", ">=", fields.Date.today())],
+            },
+            "past": {
+                "label": _("Past"),
+                "domain": [("scheduled_date", "<", fields.Date.today())],
+            },
+        }
+
+        domain = []
+
+        if filterby in filter_options:
+            domain += filter_options[filterby]["domain"]
+        else:
+            filterby = "all"
+
+        # -- Search
+        if search:
+            if search_in == "partner":
+                domain += [("contact_bank_id.bank_name", "ilike", search)]
+            else:
+                domain += [
+                    "|",
+                    ("name", "ilike", search),
+                    ("contact_bank_id.bank_name", "ilike", search),
+                ]
+
+        # -- Count & pager
+        total = ScheduledPayment.search_count(domain)
+        pager = portal_pager(
+            url="/my/payments",
+            total=total,
+            page=page,
+            step=20,
+            url_args={"sortby": sortby, "filterby": filterby, "search": search},
+        )
+
+        payments = ScheduledPayment.search(
+            domain, order="invoice_date desc", offset=pager["offset"], limit=20
+        )
+
+        values = {
+            "payments": payments,
+            "page_name": "schedule_payment",
+            "pager": pager,
+            "default_url": "/my/payments",
+            "searchbar_filters": filter_options,
+            "sortby": sortby,
+            "filterby": filterby,
+            "search": search,
+            "search_in": search_in,
+            "searchbar_inputs": searchbar_inputs,
+        }
+
+        return request.render(
+            "account_banking_ach_direct_debit_portal.portal_scheduled_payments", values
+        )
+
+    @http.route(
+        "/payment",
+        type="http",
+        auth="user",
+        website=True,
+        methods=["GET", "POST"],
+    )
+    def payment(self, **kw):
+        try:
+            invoice_ids = list(map(int, request.httprequest.args.getlist("invoice")))
+        except Exception:
+            return request.redirect("/my/invoices")
+
+        invoices = request.env["account.move"].search(
+            [
+                ("id", "in", invoice_ids),
+                *self._get_invoices_domain(),
+            ]
+        )
+
+        if len(invoices) == 0:
+            return request.redirect("/my/invoices")
+
+        earliest_due_date = (
+            min(invoices.mapped("invoice_date_due")) if invoices else None
+        )
+
+        total_amount = sum(
+            -inv.amount_residual
+            if inv.move_type == "out_refund"
+            else inv.amount_residual
+            for inv in invoices
+        )
+
+        display_currency = invoices[0].currency_id if invoices else None
+
+        select_payment_url = "/select-payment-method?" + "&".join(
+            f"invoice={invoice_id}" for invoice_id in invoice_ids
+        )
+
+        values = {
+            "page_name": "payment",
+            "invoices": invoices,
+            "quantity": len(invoices),
+            "earliest_due_date": earliest_due_date,
+            "total_amount": total_amount,
+            "display_currency": display_currency,
+            "select_payment_url": select_payment_url,
+        }
+
+        return request.render(
+            "account_banking_ach_direct_debit_portal.portal_payment", values
+        )
+
+    @http.route(
+        "/manual-payment",
+        type="http",
+        auth="user",
+        website=True,
+        methods=["GET", "POST"],
+    )
+    def manual_payment(self, **kw):
+        invoices = request.env["account.move"].search(
+            self._get_invoices_domain(), limit=10
+        )
+
+        try:
+            invoice_id = int(request.httprequest.args.get("invoice_id"))
+
+            invoice = request.env["account.move"].browse(invoice_id)
+
+            invoice.check_access_rights("read")
+        except Exception:
+            invoice_id = None
+            invoice = None
+
+        values = {
+            "page_name": "manual_payment",
+            "invoices": invoices,
+            "current_invoice": invoice,
+            "selected_invoice_id": invoice_id,
+        }
+
+        return request.render(
+            "account_banking_ach_direct_debit_portal.portal_manual_payment", values
+        )
+
+    @http.route(
+        "/select-payment-method",
+        type="http",
+        auth="user",
+        website=True,
+        methods=["GET", "POST"],
+    )
+    def select_payment_method(self, **kw):
+        try:
+            invoice_ids = list(map(int, request.httprequest.args.getlist("invoice")))
+        except Exception:
+            return request.redirect("/my/invoices")
+
+        invoices = request.env["account.move"].search(
+            [
+                ("id", "in", invoice_ids),
+                *self._get_invoices_domain(),
+            ]
+        )
+
+        if len(invoices) == 0:
+            return request.redirect("/my/invoices")
+
+        earliest_due_date = (
+            min(invoices.mapped("invoice_date_due")) if invoices else None
+        )
+
+        total_amount = sum(
+            -inv.amount_residual
+            if inv.move_type == "out_refund"
+            else inv.amount_residual
+            for inv in invoices
+        )
+
+        display_currency = invoices[0].currency_id if invoices else None
+
+        make_payment_url = "/payment-confirmation?" + "&".join(
+            f"invoice={invoice_id}" for invoice_id in invoice_ids
+        )
+
+        values = {
+            "page_name": "select_payment_method",
+            "invoices": invoices,
+            "earliest_due_date": earliest_due_date,
+            "total_amount": total_amount,
+            "display_currency": display_currency,
+            "make_payment_url": make_payment_url,
+        }
+
+        return request.render(
+            "account_banking_ach_direct_debit_portal.portal_select_payment_method",
+            values,
+        )
+
+    @http.route(
+        "/payment-confirmation",
+        type="http",
+        auth="user",
+        website=True,
+        methods=["GET", "POST"],
+    )
+    def payment_confirmation(self, **kw):
+        try:
+            invoice_ids = list(map(int, request.httprequest.args.getlist("invoice")))
+        except Exception:
+            return request.redirect("/my/invoices")
+
+        invoices = request.env["account.move"].search(
+            [
+                ("id", "in", invoice_ids),
+                *self._get_invoices_domain(),
+            ]
+        )
+
+        payment_method = request.httprequest.args.get("payment_method", "bank_account")
+
+        make_payment_url = "/make-payment?" + "&".join(
+            f"invoice={invoice_id}" for invoice_id in invoice_ids
+        )
+
+        make_payment_url += f"&payment_method={payment_method}"
+
+        earliest_due_date = (
+            min(invoices.mapped("invoice_date_due")) if invoices else None
+        )
+
+        total_due = sum(invoices.mapped("amount_residual"))
+
+        total_amount = sum(
+            -inv.amount_residual
+            if inv.move_type == "out_refund"
+            else inv.amount_residual
+            for inv in invoices
+        )
+
+        partner_bank = request.env["res.partner.bank"].search(
+            [
+                ("partner_id", "=", request.env.user.partner_id.id),
+                ("default", "=", True),
+            ],
+            limit=1,
+        )
+
+        display_currency = invoices[0].currency_id if invoices else None
+
+        values = {
+            "page_name": "payment_confirmation",
+            "make_payment_url": make_payment_url,
+            "invoices": invoices,
+            "total_due": total_due,
+            "earliest_due_date": earliest_due_date,
+            "total_amount": total_amount,
+            "partner_bank": partner_bank,
+            "display_currency": display_currency,
+        }
+
+        return request.render(
+            "account_banking_ach_direct_debit_portal.portal_payment_confirmation",
+            values,
+        )
+
+    @http.route(
+        "/make-payment",
+        type="http",
+        auth="user",
+        website=True,
+        methods=["POST"],
+    )
+    def make_payment(self, **kw):
+        try:
+            invoice_ids = list(map(int, request.httprequest.args.getlist("invoice")))
+        except Exception:
+            return request.redirect("/my/invoices")
+
+        invoices = request.env["account.move"].search(
+            [
+                ("id", "in", invoice_ids),
+                *self._get_invoices_domain(),
+            ]
+        )
+
+        if len(invoices) == 0:
+            return request.redirect("/my/invoices")
+
+        payment_method = kw.get("payment_method", "bank_account")
+
+        payments_vals = []
+
+        for invoice in invoices:
+            bank_journal = request.env["account.journal"].search(
+                [
+                    ("company_id", "=", invoice.company_id.id),
+                    ("type", "=", "bank"),
+                ],
+                limit=1,
+            )
+
+            payment_method_line = bank_journal._get_available_payment_method_lines(
+                "inbound"
+            )[:1]
+
+            if not payment_method_line:
+                raise UserError(
+                    _("No valid payment method line found for the invoice's journal.")
+                )
+
+            payment_date = fields.Date.today()
+
+            if payment_method == "credit_card":
+                partner = invoice.partner_id
+
+                if partner.autopay == "end_of_month":
+                    last_day = calendar.monthrange(
+                        payment_date.year, payment_date.month
+                    )[1]
+                    month_end = date(payment_date.year, payment_date.month, last_day)
+
+                    payment_date = month_end - timedelta(days=5)
+                elif partner.autopay == "on_due_date":
+                    payment_date = invoice.invoice_date_due
+
+            payments_vals.append(
+                {
+                    "payment_type": "inbound",
+                    "partner_type": "customer",
+                    "partner_id": invoice.partner_id.id,
+                    "amount": -invoice.amount_residual
+                    if invoice.move_type == "out_refund"
+                    else invoice.amount_residual,
+                    "currency_id": invoice.currency_id.id,
+                    "date": payment_date,
+                    "journal_id": bank_journal.id,
+                    "payment_method_line_id": payment_method_line.id,
+                    "ref": invoice.ref or invoice.name,
+                }
+            )
+
+        payment = request.env["account.payment"].create(payments_vals)
+        payment.action_post()
+
+        return request.redirect("/payment-success")
+
+    @http.route(
+        "/payment-success",
+        type="http",
+        auth="user",
+        website=True,
+        methods=["GET"],
+    )
+    def payment_success(self, **kw):
+        return request.render(
+            "account_banking_ach_direct_debit_portal.portal_payment_success"
+        )
