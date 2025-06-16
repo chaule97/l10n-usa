@@ -27,3 +27,11 @@ class ResConfigSettings(models.TransientModel):
         help="Secret Key provided by Plaid",
         config_parameter="account_banking_ach_direct_debit_portal.plaid_secret",
     )
+
+    credit_card_surcharge = fields.Float(
+        string="Credit Card Surcharge (%)",
+        config_parameter="account_banking_ach_direct_debit_portal.credit_card_surcharge",
+        default=3.0,
+        help="Surcharge percentage to apply "
+        "when customers pay with a credit card on the portal.",
+    )

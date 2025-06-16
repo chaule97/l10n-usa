@@ -600,120 +600,134 @@
     <template id="portal_select_payment_method">
         <t t-call="portal.portal_layout">
             <t t-set="breadcrumbs_searchbar" t-value="True" />
-
             <t t-call="account_banking_ach_direct_debit_portal.debit_portal_searchbar">
                 <t t-set="title">Payment Method</t>
             </t>
-
             <div id="payment" class="container my-0 my-lg-4">
                 <form t-att-action="make_payment_url" method="get">
                     <t t-foreach="invoices" t-as="invoice">
                         <input type="hidden" name="invoice" t-att-value="invoice.id" />
                     </t>
-
                     <div class="row">
-                      <div class="col-md-8 mb-3">
-                        <div class="d-none d-md-block">
-                            <h5 class="card-title">Payment method</h5>
-                        </div>
-
-                        <div class="rounded border mt-md-3">
-                            <label class="payment-method-option" for="rule_1">
-                                <div
-                                        class="d-flex justify-content-between align-items-center cursor-pointer w-100"
+                        <div class="col-md-8 mb-3">
+                            <div class="d-none d-md-block">
+                                <h5 class="card-title">Payment method</h5>
+                            </div>
+                            <div class="rounded border mt-md-3">
+                                <t t-foreach="payment_methods" t-as="method">
+                                    <label
+                                        class="payment-method-option px-md-3 px-1"
+                                        t-att-for="method['id']"
                                     >
-                                    <div class="flex-desktop">
                                         <div
-                                                class="d-flex justify-content-start align-items-center"
-                                            >
-                                            <input
-                                                    type="radio"
-                                                    value="bank_account"
-                                                    name="payment_method"
-                                                    id="rule_1"
-                                                    checked="true"
-                                                />
-                                            <span
-                                                    class="option ms-2"
-                                                >Bank account</span>
-                                        </div>
-                                        <span
-                                                class="note text-muted ms-2"
-                                            >1% Discount (with plaid verification)</span>
-                                    </div>
-
-                                    <div />
-                                </div>
-                            </label>
-
-                            <label class="payment-method-option" for="rule_2">
-                                <div class="flex-desktop cursor-pointer w-100">
-                                    <div
-                                            class="d-flex justify-content-start align-items-center"
+                                            class="flex-desktop justify-content-between cursor-pointer w-100"
                                         >
-                                        <div
-                                                class="d-flex justify-content-start align-items-center"
-                                            >
-                                            <input
-                                                    type="radio"
-                                                    value="credit_card"
-                                                    name="payment_method"
-                                                    id="rule_2"
+                                            <div class="w-md-75 w-100">
+                                                <div class="form-check">
+                                                    <input
+                                                        type="radio"
+                                                        name="payment_method"
+                                                        class="form-check-input"
+                                                        t-att-id="method['id']"
+                                                        t-att-value="method['value']"
+                                                        t-att-checked="'checked' if method['checked'] else None"
+                                                        onchange="this.form.submit();"
+                                                    />
+                                                    <label
+                                                        class="form-check-label fw-normal"
+                                                        t-att-for="method['id']"
+                                                        t-esc="method['label']"
+                                                    />
+                                                    <span
+                                                        class="note text-muted ms-md-4 ms-2"
+                                                        t-esc="method['note']"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div t-if="method['image']">
+                                                <img
+                                                    t-att-src="method['image']"
+                                                    alt="My Image"
+                                                    class="credit_card_img"
                                                 />
-                                            <span class="option ms-2">Credit card</span>
+                                            </div>
                                         </div>
-                                        <span
-                                                class="note text-muted ms-2"
-                                            >3% Surcharge</span>
-                                    </div>
-
-                                    <div><img
-                                                t-att-src="'/account_banking_ach_direct_debit_portal/static/src/img/credit_card.png'"
-                                                alt="My Image"
-                                                class="credit_card_img"
-                                            /></div>
-                                </div>
-                            </label>
+                                    </label>
+                                </t>
+                            </div>
                         </div>
-                      </div>
-
-                      <div class="col-md-4 mb-3 d-none d-md-block">
-                        <div class="card summary h-100">
-                          <div class="card-body">
-                            <h5 class="card-title">Details</h5>
-                            <div class="d-flex justify-content-between mb-2">
-                              <span class="label">Invoice no</span>
-                              <div>
-                                <div
+                        <div class="col-md-4 mb-3 d-none d-md-block">
+                            <div class="card summary h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title">Summary</h5>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="label">Invoice no</span>
+                                        <div>
+                                            <div
                                                 t-foreach="invoices"
                                                 t-as="invoice"
                                                 t-field="invoice.name"
-                                            />
-                              </div>
-                            </div>
-                            <div
+                                            /></div>
+                                    </div>
+                                    <div
                                         class="d-flex justify-content-between border-top pt-2 mb-2"
                                     >
-                              <span class="label">Amount due</span>
-                              <span
+                                        <span class="label">Amount due</span>
+                                        <t
+                                            t-if="surcharge_percent and selected_payment_method == 'credit_card'"
+                                        >
+                                            <span
+                                                t-esc="base_total_amount"
+                                                t-options='{"widget": "monetary", "display_currency": display_currency}'
+                                            />
+                                        </t>
+                                        <t t-else="">
+                                            <span
+                                                t-esc="total_amount"
+                                                t-options='{"widget": "monetary", "display_currency": display_currency}'
+                                            />
+                                        </t>
+                                    </div>
+                                    <div
+                                        class="d-flex justify-content-between border-top pt-2 mb-2"
+                                    >
+                                        <span class="label">Due date</span>
+                                        <span t-esc="earliest_due_date" />
+                                    </div>
+                                    <t
+                                        t-if="surcharge_percent and selected_payment_method == 'credit_card'"
+                                    >
+                                        <div
+                                            class="d-flex justify-content-between border-top pt-2 pb-4 mb-3"
+                                        >
+                                            <span class="label">Surcharge</span>
+                                            <span
+                                                t-esc="surcharge_amount"
+                                                t-options='{"widget": "monetary", "display_currency": display_currency}'
+                                            />
+                                        </div>
+                                    </t>
+                                    <div
+                                        class="d-flex justify-content-between border-top pt-2 mb-2 fw-bold"
+                                    >
+                                        <span class="label">Total Amount</span>
+                                        <span
                                             t-esc="total_amount"
                                             t-options='{"widget": "monetary", "display_currency": display_currency}'
                                         />
-                            </div>
-                            <div
-                                        class="d-flex justify-content-between border-top pt-2 mb-2"
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        name="action"
+                                        value="make_payment"
+                                        class="btn btn-submit w-100 mt-2"
                                     >
-                              <span class="label">Due date</span>
-                              <span t-esc="earliest_due_date" />
+                                        Make a Payment
+                                    </button>
+                                </div>
                             </div>
-                            <button type="submit" class="btn btn-submit w-100 mt-5">
-                                Make a Payment
-                            </button>
-                          </div>
                         </div>
-                      </div>
                     </div>
-
                     <div class="d-md-none">
                         <button type="submit" class="btn btn-submit w-100 mt-5">
                             Done

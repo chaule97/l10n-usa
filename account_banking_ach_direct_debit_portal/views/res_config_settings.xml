@@ -53,6 +53,24 @@
                         </div>
                     </div>
                 </div>
+                <h2>Credit Card</h2>
+                <div
+                    class="row mt16 o_settings_container"
+                    id="credit_card_surcharge_settings"
+                >
+                    <div class="col-xs-12 col-md-6 o_setting_box">
+                        <div class="o_setting_left_pane" />
+                        <div class="o_setting_right_pane">
+                            <label for="credit_card_surcharge" />
+                            <div class="text-muted">
+                                Surcharge percentage to apply when customers pay with a credit card on the portal.
+                            </div>
+                            <div class="content-group">
+                                <field name="credit_card_surcharge" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </xpath>
         </field>
     </record>
