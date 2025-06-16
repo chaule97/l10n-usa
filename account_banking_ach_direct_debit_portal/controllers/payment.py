@@ -1,11 +1,37 @@
 import calendar
+import copy
 from datetime import date, timedelta
 
-from odoo import _, fields, http
-from odoo.exceptions import UserError
-from odoo.http import request
+import werkzeug.urls
 
+from odoo import _, fields, http
+from odoo.exceptions import UserError, ValidationError
+from odoo.fields import Command
+from odoo.http import request
+from odoo.tools import float_repr
+
+from odoo.addons.payment import utils as payment_utils
+from odoo.addons.payment.controllers import portal as payment_portal
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
+
+PAYMENT_METHODS = [
+    {
+        "id": "1",
+        "value": "bank_account",
+        "label": "Bank account",
+        "note": "1% Discount (with plaid verification)",
+        "checked": False,
+        "image": None,
+    },
+    {
+        "id": "2",
+        "value": "credit_card",
+        "label": "Credit card",
+        "note": "",
+        "checked": False,
+        "image": "/account_banking_ach_direct_debit_portal/static/src/img/credit_card.png",
+    },
+]
 
 
 class PaymentController(CustomerPortal):
@@ -211,14 +237,14 @@ class PaymentController(CustomerPortal):
             ]
         )
 
-        if len(invoices) == 0:
-            return request.redirect("/my/invoices")
+        if not invoices:
+            raise ValidationError(_("The provided parameters are invalid."))
 
         earliest_due_date = (
             min(invoices.mapped("invoice_date_due")) if invoices else None
         )
 
-        total_amount = sum(
+        base_total_amount = sum(
             -inv.amount_residual
             if inv.move_type == "out_refund"
             else inv.amount_residual
@@ -227,17 +253,81 @@ class PaymentController(CustomerPortal):
 
         display_currency = invoices[0].currency_id if invoices else None
 
-        make_payment_url = "/payment-confirmation?" + "&".join(
-            f"invoice={invoice_id}" for invoice_id in invoice_ids
+        selected_payment_method = kw.get("payment_method") or "bank_account"
+        query_params = {
+            "invoice": invoice_ids,
+            "payment_method": selected_payment_method,
+        }
+        make_payment_url = "/select-payment-method?" + werkzeug.urls.url_encode(
+            query_params
+        )
+
+        surcharge_percent = self._get_surcharge_percent()
+        surcharge_amount = 0.0
+        company = request.env.user.partner_id.company_id
+        currency = display_currency or company.currency_id
+        total_amount = base_total_amount
+        if selected_payment_method == "credit_card" and surcharge_percent:
+            surcharge_amount = currency.round(
+                base_total_amount * surcharge_percent / 100
+            )
+            total_amount += surcharge_amount
+        total_amount_format = float_repr(
+            total_amount, precision_digits=currency.decimal_places
+        )
+        total_amount = float(total_amount_format)
+
+        if request.params.get("action") == "make_payment":
+            if selected_payment_method == "credit_card":
+                partner_id = request.env.user.partner_id.id
+                currency_id = currency.id
+                access_token = payment_utils.generate_access_token(
+                    partner_id, total_amount, currency_id
+                )
+                query_params = {
+                    "amount": total_amount,
+                    "access_token": access_token,
+                    "surcharge_amount": surcharge_amount,
+                    "base_total_amount": base_total_amount,
+                    "partner_id": partner_id,
+                    "currency_id": currency_id,
+                    "invoice": invoice_ids,
+                }
+                return request.redirect(
+                    "/payment/pay?" + werkzeug.urls.url_encode(query_params)
+                )
+            elif selected_payment_method == "bank_account":
+                make_payment_url = "/payment-confirmation?" + werkzeug.urls.url_encode(
+                    query_params
+                )
+                return request.redirect(make_payment_url)
+        payment_methods = copy.deepcopy(PAYMENT_METHODS)
+        payment_methods[0].update(
+            {"checked": selected_payment_method == "bank_account"}
+        )
+        payment_methods[1].update(
+            {
+                "checked": selected_payment_method == "credit_card",
+                "note": f"{surcharge_percent:.4g}% Surcharge"
+                if surcharge_percent
+                else "",
+            }
         )
 
         values = {
             "page_name": "select_payment_method",
             "invoices": invoices,
             "earliest_due_date": earliest_due_date,
+            "base_total_amount": base_total_amount,
             "total_amount": total_amount,
             "display_currency": display_currency,
             "make_payment_url": make_payment_url,
+            "surcharge_percent": (
+                surcharge_percent if selected_payment_method == "credit_card" else 0.0
+            ),
+            "surcharge_amount": surcharge_amount,
+            "selected_payment_method": selected_payment_method,
+            "payment_methods": payment_methods,
         }
 
         return request.render(
@@ -403,4 +493,72 @@ class PaymentController(CustomerPortal):
     def payment_success(self, **kw):
         return request.render(
             "account_banking_ach_direct_debit_portal.portal_payment_success"
+        )
+
+    def _get_surcharge_percent(self):
+        surcharge_parameter = (
+            request.env["ir.config_parameter"]
+            .sudo()
+            .get_param("account_banking_ach_direct_debit_portal.credit_card_surcharge")
+        )
+        return self._cast_as_float(surcharge_parameter) if surcharge_parameter else 0.0
+
+
+class PaymentPortal(payment_portal.PaymentPortal):
+    @http.route()
+    def payment_pay(self, *args, **kwargs):
+        try:
+            invoice_ids = list(map(int, request.httprequest.args.getlist("invoice")))
+        except Exception:
+            invoice_ids = []
+        if invoice_ids:
+            invoice_sudo = (
+                request.env["account.move"].sudo().browse(invoice_ids).exists()
+            )
+            if not invoice_sudo:
+                raise ValidationError(_("The provided parameters are invalid."))
+            kwargs.update(
+                {
+                    "invoices": invoice_sudo.ids,
+                }
+            )
+        return super().payment_pay(*args, **kwargs)
+
+    def _get_custom_rendering_context_values(self, invoices=None, **kwargs):
+        rendering_context_values = super()._get_custom_rendering_context_values(
+            invoices=invoices, **kwargs
+        )
+        if invoices:
+            rendering_context_values["invoices"] = invoices
+            invoice_sudo = request.env["account.move"].sudo().browse(invoices)
+            if not invoice_sudo:
+                return rendering_context_values
+            references = invoice_sudo.mapped("payment_reference")
+            base_total_amount, surcharge_amount = tuple(
+                map(
+                    self._cast_as_float,
+                    (
+                        kwargs.get("base_total_amount", 0.0),
+                        kwargs.get("surcharge_amount", 0.0),
+                    ),
+                )
+            )
+            rendering_context_values.update(
+                {
+                    "surcharge_amount": surcharge_amount,
+                    "base_total_amount": base_total_amount,
+                    "reference_prefix": ", ".join(references),
+                }
+            )
+        return rendering_context_values
+
+    def _create_transaction(
+        self, *args, invoices=None, custom_create_values=None, **kwargs
+    ):
+        if invoices:
+            if custom_create_values is None:
+                custom_create_values = {}
+            custom_create_values["invoice_ids"] = [Command.set(invoices)]
+        return super()._create_transaction(
+            *args, custom_create_values=custom_create_values, **kwargs
         )

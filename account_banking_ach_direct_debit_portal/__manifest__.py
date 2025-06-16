@@ -9,7 +9,7 @@
     "author": "Kencove, Odoo Community Association (OCA)",
     "website": "https://github.com/OCA/l10n-usa",
     "category": "Banking addons",
-    "depends": ["account_banking_ach_direct_debit"],
+    "depends": ["account_banking_ach_direct_debit", "account_payment"],
     "data": [
         "security/portal_user_access.xml",
         "views/searchbar.xml",
@@ -19,11 +19,13 @@
         "views/homepage_templates.xml",
         "views/invoice_templates.xml",
         "views/payment_templates.xml",
+        "views/payment_checkout_templates.xml",
         "views/res_config_settings.xml",
     ],
     "assets": {
         "web.assets_frontend": [
             "account_banking_ach_direct_debit_portal/static/src/scss/*.scss",
+            "account_banking_ach_direct_debit_portal/static/src/js/payment_form.js",
         ],
         "web.account_banking_ach_direct_debit_portal": [
             "account_banking_ach_direct_debit_portal/static/src/js/autopay_rules.js",
