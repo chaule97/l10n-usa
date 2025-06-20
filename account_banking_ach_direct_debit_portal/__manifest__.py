@@ -11,6 +11,7 @@
     "category": "Banking addons",
     "depends": ["account_banking_ach_direct_debit", "account_payment"],
     "data": [
+        "data/res_config_settings_data.xml",
         "security/portal_user_access.xml",
         "views/searchbar.xml",
         "views/autopay_rules_templates.xml",
