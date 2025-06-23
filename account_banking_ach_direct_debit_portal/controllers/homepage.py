@@ -3,6 +3,8 @@ from odoo.http import request
 
 from odoo.addons.portal.controllers.portal import CustomerPortal
 
+from ..controllers.user_portal import UserPortalController as user_portal
+
 
 class HomepageController(CustomerPortal):
     def _get_invoices_domain(self):
@@ -100,6 +102,7 @@ class HomepageController(CustomerPortal):
                 "display_currency": partner.currency_id,
                 "payments": payments,
                 "amount_due": amount_due,
+                "invisible_button": not user_portal.is_ach_accessible(),
             }
         )
 

@@ -7,6 +7,8 @@ from odoo.osv import expression
 from odoo.addons.account.controllers.portal import PortalAccount
 from odoo.addons.portal.controllers.portal import pager as portal_pager
 
+from ..controllers.user_portal import UserPortalController as user_portal
+
 
 class InvoiceController(PortalAccount):
     def _get_status_searchbar_filters(self):
@@ -171,6 +173,7 @@ class InvoiceController(PortalAccount):
                 "search": search,
                 "search_in": search_in,
                 "searchbar_inputs": searchbar_inputs,
+                "invisible_button": not user_portal.is_ach_accessible(),
             }
         )
 

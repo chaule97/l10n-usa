@@ -35,3 +35,17 @@ class ResConfigSettings(models.TransientModel):
         help="Surcharge percentage to apply "
         "when customers pay with a credit card on the portal.",
     )
+
+    enable_portal = fields.Selection(
+        [
+            ("disabled", "Disabled"),
+            ("selected_users_only", "Selected Only User"),
+            ("for_all_portal_users", "For All Portal Users"),
+        ],
+        default="selected_users_only",
+        config_parameter="account_banking_ach_direct_debit_portal.enable_portal",
+        help="Controls who can access the ACH Payment Portal features:\n"
+        "- Disabled: Hide all ACH portal features\n"
+        "- Selected Users Only: Show to users with 'Enable ACH Payment Portal' enabled\n"
+        "- All Portal Users: Enable ACH features for all portal users",
+    )

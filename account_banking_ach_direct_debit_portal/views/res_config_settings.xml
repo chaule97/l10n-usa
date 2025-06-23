@@ -71,6 +71,32 @@
                         </div>
                     </div>
                 </div>
+                <h2>ACH Payment Portal Activation</h2>
+                <div
+                    class="row mt16 o_settings_container"
+                    id="payment_portal_activation_settings"
+                >
+                    <div class="col-12 col-lg-12 o_setting_box">
+                        <div class="text-muted">
+                            <p
+                                class="mb-0"
+                            >Controls who can access the ACH Payment Portal features:</p>
+                            <ul class="">
+                                <li>Disabled: Hide all ACH portal features</li>
+                                <li
+                                >Selected Users Only: Show to users with 'Enable ACH Payment Portal' enabled</li>
+                                <li
+                                >All Portal Users: Enable ACH features for all portal users</li>
+                            </ul>
+                        </div>
+                        <div class="o_setting_right_pane mt16">
+                            <label for="enable_portal" />
+                            <div>
+                                <field name="enable_portal" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </xpath>
         </field>
     </record>

@@ -6,6 +6,8 @@ from odoo.http import request
 
 from odoo.addons.portal.controllers.portal import CustomerPortal
 
+from ..controllers.user_portal import UserPortalController as user_portal
+
 
 class AutoPayRulesController(CustomerPortal):
     @http.route(
@@ -16,6 +18,9 @@ class AutoPayRulesController(CustomerPortal):
         methods=["GET", "POST"],
     )
     def portal_autopay_rules(self, **kw):
+        if not user_portal.is_ach_accessible():
+            return user_portal.deny_403()
+
         if request.httprequest.method == "POST":
             autopay_rule = kw.get("autopay_rule")
 

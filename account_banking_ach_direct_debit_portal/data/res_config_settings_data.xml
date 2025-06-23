@@ -10,4 +10,13 @@
         >account_banking_ach_direct_debit_portal.credit_card_surcharge</field>
         <field name="value">3.0</field>
     </record>
+
+    <record
+        id="default_param_enable_ach_payment_portal"
+        model="ir.config_parameter"
+        forcecreate="0"
+    >
+        <field name="key">account_banking_ach_direct_debit_portal.enable_portal</field>
+        <field name="value">selected_users_only</field>
+    </record>
 </odoo>

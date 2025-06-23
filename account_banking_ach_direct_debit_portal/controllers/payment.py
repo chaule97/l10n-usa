@@ -14,6 +14,8 @@ from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment.controllers import portal as payment_portal
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
 
+from ..controllers.user_portal import UserPortalController as user_portal
+
 PAYMENT_METHODS = [
     {
         "id": "1",
@@ -61,6 +63,9 @@ class PaymentController(CustomerPortal):
     def portal_my_payments(
         self, page=1, sortby=None, filterby=None, search="", search_in="all", **kw
     ):
+        if not user_portal.is_ach_accessible():
+            return user_portal.deny_403()
+
         ScheduledPayment = request.env["account.payment"]
 
         searchbar_inputs = {
@@ -178,6 +183,7 @@ class PaymentController(CustomerPortal):
             "total_amount": total_amount,
             "display_currency": display_currency,
             "select_payment_url": select_payment_url,
+            "invisible_button": not user_portal.is_ach_accessible(),
         }
 
         return request.render(
@@ -192,6 +198,9 @@ class PaymentController(CustomerPortal):
         methods=["GET", "POST"],
     )
     def manual_payment(self, **kw):
+        if not user_portal.is_ach_accessible():
+            return user_portal.deny_403()
+
         invoices = request.env["account.move"].search(
             self._get_invoices_domain(), limit=10
         )
@@ -211,6 +220,7 @@ class PaymentController(CustomerPortal):
             "invoices": invoices,
             "current_invoice": invoice,
             "selected_invoice_id": invoice_id,
+            "invisible_button": not user_portal.is_ach_accessible(),
         }
 
         return request.render(
@@ -328,6 +338,7 @@ class PaymentController(CustomerPortal):
             "surcharge_amount": surcharge_amount,
             "selected_payment_method": selected_payment_method,
             "payment_methods": payment_methods,
+            "invisible_button": not user_portal.is_ach_accessible(),
         }
 
         return request.render(
@@ -491,6 +502,9 @@ class PaymentController(CustomerPortal):
         methods=["GET"],
     )
     def payment_success(self, **kw):
+        if not user_portal.is_ach_accessible():
+            return user_portal.deny_403()
+
         return request.render(
             "account_banking_ach_direct_debit_portal.portal_payment_success"
         )

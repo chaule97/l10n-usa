@@ -49,26 +49,29 @@
                     t-call="account_banking_ach_direct_debit_portal.invoice_debit_portal_searchbar"
                 >
                     <t t-set="title">Invoices</t>
-
-                    <div
-                        class="action-wrapper d-flex align-items-center justify-content-end"
-                    >
-                        <a
-                            href="/manual-payment"
-                            class="btn btn-secondary manual-pay-btn me-2"
+                    <t t-if="not invisible_button">
+                        <div
+                            class="action-wrapper d-flex align-items-center justify-content-end"
                         >
-                            Pay Manually
-                        </a>
-                        <a href="/my/banks" class="btn btn-secondary manage-bank-btn">
-                            Manage bank accounts
-                        </a>
-                        <a
-                            class="dropdown-item btn btn-blue pay-btn d-none"
-                            href="javascript:void(0);"
-                        >
-                            <i class="fa fa-exchange me-2" /> Pay
-                        </a>
-                    </div>
+                            <a
+                                href="/manual-payment"
+                                class="btn btn-secondary manual-pay-btn me-2"
+                            >
+                                Pay Manually
+                            </a>
+                            <a
+                                href="/my/banks"
+                                class="btn btn-secondary manage-bank-btn"
+                            >
+                                Manage bank accounts
+                            </a>
+                            <a
+                                class="dropdown-item btn btn-blue pay-btn d-none"
+                                href="javascript:void(0);"
+                            >
+                                <i class="fa fa-exchange me-2" /> Pay </a>
+                        </div>
+                    </t>
                 </t>
 
                 <t t-if="not invoices">
@@ -81,7 +84,9 @@
                         <t t-call="portal.portal_table">
                             <thead>
                                 <tr class="active">
-                                    <th><input type="checkbox" /></th>
+                                    <th>
+                                        <input type="checkbox" />
+                                    </th>
                                     <th>Invoice no</th>
                                     <th>Date</th>
                                     <th class='d-none d-md-table-cell'>Due Date</th>
@@ -93,12 +98,14 @@
                             <tbody>
                                 <t t-foreach="invoices" t-as="invoice">
                                     <tr>
-                                        <td><input
+                                        <td>
+                                            <input
                                                 type="checkbox"
                                                 name="invoice_ids"
                                                 class="invoice-checkbox"
                                                 t-att-value="invoice.id"
-                                            /></td>
+                                            />
+                                        </td>
                                         <td>
                                             <t
                                                 t-esc="invoice.name"
@@ -106,7 +113,9 @@
                                             />
                                             <em t-else="">Draft Invoice</em>
                                         </td>
-                                        <td><span t-field="invoice.invoice_date" /></td>
+                                        <td>
+                                            <span t-field="invoice.invoice_date" />
+                                        </td>
                                         <td class='d-none d-md-table-cell'>
                                             <span t-field="invoice.invoice_date_due" />
                                         </td>
@@ -131,7 +140,8 @@
                                                     />
                                                     <span
                                                         class="d-none d-md-inline"
-                                                    > Waiting for Payment</span>
+                                                    > Waiting for
+                                                        Payment</span>
                                                 </span>
                                             </t>
                                             <t
@@ -192,7 +202,7 @@
                                                     data-bs-toggle="dropdown"
                                                     aria-expanded="false"
                                                 >
-                                                  ⋮
+                                                    ⋮
                                                 </button>
                                                 <ul
                                                     class="dropdown-menu dropdown-menu-end shadow-sm rounded-3"
@@ -204,8 +214,8 @@
                                                         >
                                                             <i
                                                                 class="fa fa-wpforms me-2"
-                                                            /> View invoice
-                                                        </a>
+                                                            /> View
+                                                            invoice </a>
                                                     </li>
                                                 </ul>
                                             </div>
@@ -259,65 +269,73 @@
 
 
                             <div class="mx-1">
-                              <strong>Status</strong>
-                              <div class="tx_status">
-                                <t
+                                <strong>Status</strong>
+                                <div class="tx_status">
+                                    <t
                                         t-if="invoice.state == 'posted' and invoice.payment_state not in ('in_payment', 'paid', 'reversed')"
                                     >
-                                    <span class="badge rounded-pill text-bg-info">
-                                        <i
+                                        <span class="badge rounded-pill text-bg-info">
+                                            <i
                                                 class="fa fa-fw fa-clock-o"
                                                 aria-label="Opened"
                                                 title="Opened"
                                                 role="img"
                                             />
-                                        <span
+                                            <span
                                                 class="d-none d-md-inline"
                                             >Waiting for Payment</span>
-                                    </span>
-                                </t>
-                                <t
+                                        </span>
+                                    </t>
+                                    <t
                                         t-if="invoice.state == 'posted' and invoice.payment_state in ('paid', 'in_payment')"
                                     >
-                                    <span class="badge rounded-pill text-bg-success">
-                                        <i
+                                        <span
+                                            class="badge rounded-pill text-bg-success"
+                                        >
+                                            <i
                                                 class="fa fa-fw fa-check"
                                                 aria-label="Paid"
                                                 title="Paid"
                                                 role="img"
                                             />
-                                        <span class="d-none d-md-inline"> Paid</span>
-                                    </span>
-                                </t>
-                                <t
+                                            <span
+                                                class="d-none d-md-inline"
+                                            > Paid</span>
+                                        </span>
+                                    </t>
+                                    <t
                                         t-if="invoice.state == 'posted' and invoice.payment_state == 'reversed'"
                                     >
-                                    <span class="badge rounded-pill text-bg-success">
-                                        <i
+                                        <span
+                                            class="badge rounded-pill text-bg-success"
+                                        >
+                                            <i
                                                 class="fa fa-fw fa-check"
                                                 aria-label="Reversed"
                                                 title="Reversed"
                                                 role="img"
                                             />
-                                        <span
+                                            <span
                                                 class="d-none d-md-inline"
                                             > Reversed</span>
-                                    </span>
-                                </t>
-                                <t t-if="invoice.state == 'cancel'">
-                                    <span class="badge rounded-pill text-bg-warning">
-                                        <i
+                                        </span>
+                                    </t>
+                                    <t t-if="invoice.state == 'cancel'">
+                                        <span
+                                            class="badge rounded-pill text-bg-warning"
+                                        >
+                                            <i
                                                 class="fa fa-fw fa-remove"
                                                 aria-label="Cancelled"
                                                 title="Cancelled"
                                                 role="img"
                                             />
-                                        <span
+                                            <span
                                                 class="d-none d-md-inline"
                                             > Cancelled</span>
-                                    </span>
-                                </t>
-                            </div>
+                                        </span>
+                                    </t>
+                                </div>
                             </div>
 
                             <div class="dropdown-wrapper text-center">
@@ -327,7 +345,7 @@
                                     data-bs-toggle="dropdown"
                                     aria-expanded="false"
                                 >
-                                  ⋮
+                                    ⋮
                                 </button>
                                 <ul
                                     class="dropdown-menu dropdown-menu-end shadow-sm rounded-3"
@@ -339,8 +357,7 @@
                                         >
                                             <i
                                                 class="fa fa-wpforms me-2"
-                                            /> View invoice
-                                        </a>
+                                            /> View invoice </a>
                                     </li>
                                 </ul>
                             </div>

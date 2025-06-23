@@ -8,83 +8,91 @@
                 <div class="header mb-4">
                     <h2 class="header-title me-2">My Account</h2>
 
-                    <div class="wrapper-button">
-                        <a
-                            href="/autopay-rules"
-                            class="btn btn-blue me-2"
-                        >Auto Pay Settings</a>
-                        <a
-                            href="/manual-payment"
-                            class="btn btn-secondary"
-                        >Make a Payment</a>
-                    </div>
+                    <t t-if="not invisible_button">
+                        <div class="wrapper-button">
+                            <a
+                                href="/autopay-rules"
+                                class="btn btn-blue me-2"
+                            >Auto Pay Settings</a>
+                            <a
+                                href="/manual-payment"
+                                class="btn btn-secondary"
+                            >Make a Payment</a>
+                        </div>
+                    </t>
                 </div>
 
                 <div class="row g-4">
                     <div class="col-md-4 col-sm-12">
-                      <div class="card-credit">
-                        <div
+                        <div class="card-credit">
+                            <div
                                 class="d-flex justify-content-between align-items-center mb-2"
                             >
-                            <i class="icon fa fa-credit-card" />
+                                <i class="icon fa fa-credit-card" />
 
-                            <div class="info-icon">
-                                <i class="fa fa-info" />
-                                <div class="tooltip-box">
-                                    The total amount of credit available to you for purchases.
+                                <div class="info-icon">
+                                    <i class="fa fa-info" />
+                                    <div class="tooltip-box">
+                                        The total amount of credit available to you for purchases.
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <h6>Total credit limit</h6>
-                        <div class="amount"><span
+                            <h6>Total credit limit</h6>
+                            <div class="amount">
+                                <span
                                     t-esc="total_credit_limit"
                                     t-options='{"widget": "monetary", "display_currency": display_currency}'
-                                /></div>
-                      </div>
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     <div class="col-md-4 col-sm-12">
-                      <div class="card-credit">
-                        <div
+                        <div class="card-credit">
+                            <div
                                 class="d-flex justify-content-between align-items-center mb-2"
                             >
-                            <i class="icon fa fa-credit-card" />
-                            <div class="info-icon">
-                                <i class="fa fa-info" />
-                                <div class="tooltip-box">
-                                    The remaining credit you can use, after subtracting any unpaid balances.
+                                <i class="icon fa fa-credit-card" />
+                                <div class="info-icon">
+                                    <i class="fa fa-info" />
+                                    <div class="tooltip-box">
+                                        The remaining credit you can use, after subtracting any
+                                        unpaid balances.
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <h6>Available credit</h6>
-                        <div class="amount"><span
+                            <h6>Available credit</h6>
+                            <div class="amount">
+                                <span
                                     t-esc="available_credit"
                                     t-options='{"widget": "monetary", "display_currency": display_currency}'
-                                /></div>
-                      </div>
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     <div class="col-md-4 col-sm-12">
-                      <div class="card-credit">
-                        <div
+                        <div class="card-credit">
+                            <div
                                 class="d-flex justify-content-between align-items-center mb-2"
                             >
-                            <i class="icon fa fa-credit-card" />
-                            <div class="info-icon">
-                                <i class="fa fa-info" />
-                                <div class="tooltip-box">
-                                    The total unpaid balance from your invoices that is currently due.
+                                <i class="icon fa fa-credit-card" />
+                                <div class="info-icon">
+                                    <i class="fa fa-info" />
+                                    <div class="tooltip-box">
+                                        The total unpaid balance from your invoices that is
+                                        currently due.
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <h6>Amount due</h6>
-                        <div class="amount">
-                            <span
+                            <h6>Amount due</h6>
+                            <div class="amount">
+                                <span
                                     t-esc="amount_due"
                                     t-options='{"widget": "monetary", "display_currency": display_currency}'
                                 />
+                            </div>
                         </div>
-                      </div>
                     </div>
                 </div>
 
@@ -140,71 +148,89 @@
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
-                          </thead>
-                          <tbody>
+                        </thead>
+                        <tbody>
                             <t t-foreach="invoices" t-as="invoice">
                                 <tr>
                                     <td>#<span t-field="invoice.name" /></td>
-                                    <td><span t-field="invoice.invoice_date" /></td>
-                                    <td><span t-field="invoice.invoice_date_due" /></td>
-                                    <td><span
+                                    <td>
+                                        <span t-field="invoice.invoice_date" />
+                                    </td>
+                                    <td>
+                                        <span t-field="invoice.invoice_date_due" />
+                                    </td>
+                                    <td>
+                                        <span
                                             t-esc="-invoice.amount_residual if invoice.move_type == 'out_refund' else invoice.amount_residual"
                                             t-options='{"widget": "monetary", "display_currency": invoice.currency_id}'
-                                        /></td>
+                                        />
+                                    </td>
                                     <td class="tx_status">
                                         <t
                                             t-if="invoice.state == 'posted' and invoice.payment_state not in ('in_payment', 'paid', 'reversed')"
                                         >
                                             <span
                                                 class="badge rounded-pill text-bg-info"
-                                            ><i
+                                            >
+                                                <i
                                                     class="fa fa-fw fa-clock-o"
                                                     aria-label="Opened"
                                                     title="Opened"
                                                     role="img"
-                                                /><span
+                                                />
+                                                <span
                                                     class="d-none d-md-inline"
-                                                > Waiting for Payment</span></span>
+                                                > Waiting for Payment</span>
+                                            </span>
                                         </t>
                                         <t
                                             t-if="invoice.state == 'posted' and invoice.payment_state in ('paid', 'in_payment')"
                                         >
                                             <span
                                                 class="badge rounded-pill text-bg-success"
-                                            ><i
+                                            >
+                                                <i
                                                     class="fa fa-fw fa-check"
                                                     aria-label="Paid"
                                                     title="Paid"
                                                     role="img"
-                                                /><span
+                                                />
+                                                <span
                                                     class="d-none d-md-inline"
-                                                > Paid</span></span>
+                                                > Paid</span>
+                                            </span>
                                         </t>
                                         <t
                                             t-if="invoice.state == 'posted' and invoice.payment_state == 'reversed'"
                                         >
                                             <span
                                                 class="badge rounded-pill text-bg-success"
-                                            ><i
+                                            >
+                                                <i
                                                     class="fa fa-fw fa-check"
                                                     aria-label="Reversed"
                                                     title="Reversed"
                                                     role="img"
-                                                /><span
+                                                />
+                                                <span
                                                     class="d-none d-md-inline"
-                                                > Reversed</span></span>
+                                                > Reversed</span>
+                                            </span>
                                         </t>
                                         <t t-if="invoice.state == 'cancel'">
                                             <span
                                                 class="badge rounded-pill text-bg-warning"
-                                            ><i
+                                            >
+                                                <i
                                                     class="fa fa-fw fa-remove"
                                                     aria-label="Cancelled"
                                                     title="Cancelled"
                                                     role="img"
-                                                /><span
+                                                />
+                                                <span
                                                     class="d-none d-md-inline"
-                                                > Cancelled</span></span>
+                                                > Cancelled</span>
+                                            </span>
                                         </t>
                                     </td>
                                     <td>
@@ -213,12 +239,12 @@
                                             t-att-title="invoice.name"
                                             class="btn btn-secondary rounded-pill px-3"
                                         >
-                                        View Invoice
-                                    </a>
+                                            View Invoice
+                                        </a>
                                     </td>
                                 </tr>
                             </t>
-                          </tbody>
+                        </tbody>
                     </table>
                 </div>
 
@@ -229,81 +255,96 @@
                             <t t-foreach="invoices" t-as="invoice">
                                 <tr class="invoice-row">
                                     <td>
-                                      <div class="label">Date</div>
-                                      <div class="value"><span
-                                                t-field="invoice.invoice_date"
-                                            /></div>
+                                        <div class="label">Date</div>
+                                        <div class="value">
+                                            <span t-field="invoice.invoice_date" />
+                                        </div>
                                     </td>
                                     <td>
-                                      <div class="label">Due Date</div>
-                                      <div class="value"><span
-                                                t-field="invoice.invoice_date_due"
-                                            /></div>
+                                        <div class="label">Due Date</div>
+                                        <div class="value">
+                                            <span t-field="invoice.invoice_date_due" />
+                                        </div>
                                     </td>
                                     <td>
-                                      <div class="label">Amount</div>
-                                      <div class="value"><span
+                                        <div class="label">Amount</div>
+                                        <div class="value">
+                                            <span
                                                 t-esc="-invoice.amount_residual if invoice.move_type == 'out_refund' else invoice.amount_residual"
                                                 t-options='{"widget": "monetary", "display_currency": invoice.currency_id}'
-                                            /></div>
+                                            />
+                                        </div>
                                     </td>
                                     <td>
-                                      <div class="label">Status</div>
-                                      <div class="tx_status">
-                                        <t
+                                        <div class="label">Status</div>
+                                        <div class="tx_status">
+                                            <t
                                                 t-if="invoice.state == 'posted' and invoice.payment_state not in ('in_payment', 'paid', 'reversed')"
                                             >
-                                            <span
+                                                <span
                                                     class="badge rounded-pill text-bg-info"
-                                                ><i
+                                                >
+                                                    <i
                                                         class="fa fa-fw fa-clock-o"
                                                         aria-label="Opened"
                                                         title="Opened"
                                                         role="img"
-                                                    /><span
+                                                    />
+                                                    <span
                                                         class="d-none d-md-inline"
-                                                    > Waiting for Payment</span></span>
-                                        </t>
-                                        <t
+                                                    > Waiting for
+                                                        Payment</span>
+                                                </span>
+                                            </t>
+                                            <t
                                                 t-if="invoice.state == 'posted' and invoice.payment_state in ('paid', 'in_payment')"
                                             >
-                                            <span
+                                                <span
                                                     class="badge rounded-pill text-bg-success"
-                                                ><i
+                                                >
+                                                    <i
                                                         class="fa fa-fw fa-check"
                                                         aria-label="Paid"
                                                         title="Paid"
                                                         role="img"
-                                                    /><span
+                                                    />
+                                                    <span
                                                         class="d-none d-md-inline"
-                                                    > Paid</span></span>
-                                        </t>
-                                        <t
+                                                    > Paid</span>
+                                                </span>
+                                            </t>
+                                            <t
                                                 t-if="invoice.state == 'posted' and invoice.payment_state == 'reversed'"
                                             >
-                                            <span
+                                                <span
                                                     class="badge rounded-pill text-bg-success"
-                                                ><i
+                                                >
+                                                    <i
                                                         class="fa fa-fw fa-check"
                                                         aria-label="Reversed"
                                                         title="Reversed"
                                                         role="img"
-                                                    /><span
+                                                    />
+                                                    <span
                                                         class="d-none d-md-inline"
-                                                    > Reversed</span></span>
-                                        </t>
-                                        <t t-if="invoice.state == 'cancel'">
-                                            <span
+                                                    > Reversed</span>
+                                                </span>
+                                            </t>
+                                            <t t-if="invoice.state == 'cancel'">
+                                                <span
                                                     class="badge rounded-pill text-bg-warning"
-                                                ><i
+                                                >
+                                                    <i
                                                         class="fa fa-fw fa-remove"
                                                         aria-label="Cancelled"
                                                         title="Cancelled"
                                                         role="img"
-                                                    /><span
+                                                    />
+                                                    <span
                                                         class="d-none d-md-inline"
-                                                    > Cancelled</span></span>
-                                        </t>
+                                                    > Cancelled</span>
+                                                </span>
+                                            </t>
                                         </div>
                                     </td>
                                     <td class="text-end">
@@ -312,7 +353,7 @@
                                             t-att-title="invoice.name"
                                             class="btn btn-secondary rounded-pill px-3 py-1"
                                         >
-                                        View Invoice
+                                            View Invoice
                                         </a>
                                     </td>
                                 </tr>
@@ -373,23 +414,31 @@
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
-                          </thead>
-                          <tbody>
+                        </thead>
+                        <tbody>
                             <t t-foreach="payments" t-as="payment">
                                 <tr>
                                     <td>#<span t-field="payment.move_id.name" /></td>
-                                    <td><span t-field="payment.date" /></td>
-                                    <td><span t-field="payment.invoice_date_due" /></td>
-                                    <td><span t-field="payment.amount_total" /></td>
-                                    <td><span t-field="payment.payment_state" /></td>
+                                    <td>
+                                        <span t-field="payment.date" />
+                                    </td>
+                                    <td>
+                                        <span t-field="payment.invoice_date_due" />
+                                    </td>
+                                    <td>
+                                        <span t-field="payment.amount_total" />
+                                    </td>
+                                    <td>
+                                        <span t-field="payment.payment_state" />
+                                    </td>
                                     <td>
                                         <a class="btn btn-secondary rounded-pill px-3">
-                                        View Payment
-                                    </a>
+                                            View Payment
+                                        </a>
                                     </td>
                                 </tr>
                             </t>
-                          </tbody>
+                        </tbody>
                     </table>
                 </div>
 
@@ -400,34 +449,34 @@
                             <t t-foreach="payments" t-as="payment">
                                 <tr class="invoice-row">
                                     <td>
-                                    <div class="label">Invoice no</div>
-                                    <div class="value"><span
-                                                t-field="payment.move_id.name"
-                                            /></div>
+                                        <div class="label">Invoice no</div>
+                                        <div class="value">
+                                            <span t-field="payment.move_id.name" />
+                                        </div>
                                     </td>
                                     <td>
-                                    <div class="label">Date</div>
-                                    <div class="value"><span
-                                                t-field="payment.date"
-                                            /></div>
+                                        <div class="label">Date</div>
+                                        <div class="value">
+                                            <span t-field="payment.date" />
+                                        </div>
                                     </td>
                                     <td>
-                                    <div class="label">Due Date</div>
-                                    <div class="value"><span
-                                                t-field="payment.invoice_date_due"
-                                            /></div>
+                                        <div class="label">Due Date</div>
+                                        <div class="value">
+                                            <span t-field="payment.invoice_date_due" />
+                                        </div>
                                     </td>
                                     <td>
-                                    <div class="label">Amount</div>
-                                    <div class="value"><span
-                                                t-field="payment.amount_total"
-                                            /></div>
+                                        <div class="label">Amount</div>
+                                        <div class="value">
+                                            <span t-field="payment.amount_total" />
+                                        </div>
                                     </td>
                                     <td>
                                         <div class="label">Status</div>
-                                        <div class="value"><span
-                                                t-field="payment.payment_state"
-                                            /></div>
+                                        <div class="value">
+                                            <span t-field="payment.payment_state" />
+                                        </div>
                                     </td>
                                     <td class="text-end">
                                         <a class="btn btn-secondary rounded-pill px-3">
