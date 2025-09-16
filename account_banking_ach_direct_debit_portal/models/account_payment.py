@@ -86,7 +86,14 @@ class AccountPayment(models.Model):
         except (TypeError, ValueError, OverflowError):
             return 0
 
-    def _process_autopay_partners(self, partners, today):
+    def _exclude_authorize_invoice_domain(self):
+        return [
+            "|",
+            ("payment_provider_id", "=", False),
+            ("payment_provider_id.code", "!=", "authorize"),
+        ]
+
+    def _process_autopay_partners(self, partners, date):
         discount_percent = self._get_plaid_discount_percent()
 
         mail_template = self.env.ref(
@@ -104,10 +111,11 @@ class AccountPayment(models.Model):
                 [
                     ("partner_id", "=", partner.id),
                     ("move_type", "=", "out_invoice"),
-                    ("invoice_date_due", "<=", today),
+                    ("invoice_date_due", "=", date),
                     ("state", "=", "posted"),
                     ("payment_state", "!=", "paid"),
                     ("amount_residual", ">", 0.0),
+                    *(self._exclude_authorize_invoice_domain()),
                 ]
             )
             invoices_to_process = invoices.filtered(
@@ -131,9 +139,11 @@ class AccountPayment(models.Model):
                 if total_discount_amount > 0:
                     currency = invoices_to_process[0].currency_id
                     total_discount_amount = currency.round(total_discount_amount)
-                    self._distribute_discount_amount_autopay(
+                    invoices_to_process = self._distribute_discount_amount_autopay(
                         invoices_to_process, total_discount_amount, discount_percent
                     )
+
+            succeeded_invoices = []
 
             for invoice in invoices_to_process:
                 payment_vals = invoice.prepare_payment_register_vals(partner_bank.id)
@@ -152,13 +162,16 @@ class AccountPayment(models.Model):
                 ).action_create_payments()
 
                 if is_success:
-                    _logger.info(
-                        f"Create successful payment for invoice: '{invoice.name}'"
+                    invoice.message_post(
+                        body=f"Autopay created successfully for invoice <b>{invoice.name}</b>."
                     )
+                    succeeded_invoices.append(invoice)
                 else:
-                    _logger.info(f"Create failed payment for invoice: '{invoice.name}'")
+                    invoice.message_post(
+                        body=f"Autopay failed for invoice <b>{invoice.name}</b>."
+                    )
 
-            if mail_template and invoices_to_process:
+            if mail_template and succeeded_invoices:
                 ctx = {
                     "invoice_lines": [
                         {
@@ -166,9 +179,9 @@ class AccountPayment(models.Model):
                             "amount": invoice.amount_total_signed,
                             "currency": invoice.currency_id.name,
                         }
-                        for invoice in invoices_to_process
+                        for invoice in succeeded_invoices
                     ],
-                    "today": fields.Date.to_string(today),
+                    "today": fields.Date.to_string(date),
                 }
                 mail_template.with_context(**ctx).send_mail(partner.id, force_send=True)
 
@@ -190,6 +203,7 @@ class AccountPayment(models.Model):
                 ("payment_state", "!=", "paid"),
                 ("partner_id.autopay", "=", autopay),
                 ("amount_residual", ">", 0.0),
+                *(self._ach_invoice_domain()),
             ]
         )
 
@@ -228,7 +242,7 @@ class AccountPayment(models.Model):
         self, invoices_sudo, total_discount_amount, discount_percent
     ):
         if not invoices_sudo or total_discount_amount <= 0:
-            return
+            return []
 
         # Calculate base amounts for each invoice
         invoice_amounts = []
@@ -247,21 +261,31 @@ class AccountPayment(models.Model):
         distributed_amount = 0.0
         currency = invoices_sudo[0].currency_id
 
+        succeeded_invoices_sudo = []
+
         for i, invoice in enumerate(invoices_sudo):
-            if i == len(invoices_sudo) - 1:
-                # Last invoice gets the remainder to ensure total matches exactly
-                invoice_discount = total_discount_amount - distributed_amount
-            else:
-                # Calculate proportional amount
-                if total_base_amount > 0:
-                    proportion = invoice_amounts[i] / total_base_amount
-                    invoice_discount = currency.round(
-                        total_discount_amount * proportion
-                    )
+            try:
+                if i == len(invoices_sudo) - 1:
+                    # Last invoice gets the remainder to ensure total matches exactly
+                    invoice_discount = total_discount_amount - distributed_amount
                 else:
-                    invoice_discount = 0.0
+                    # Calculate proportional amount
+                    if total_base_amount > 0:
+                        proportion = invoice_amounts[i] / total_base_amount
+                        invoice_discount = currency.round(
+                            total_discount_amount * proportion
+                        )
+                    else:
+                        invoice_discount = 0.0
 
-            if invoice_discount > 0:
-                invoice.add_discount_line(discount_percent, invoice_discount)
+                if invoice_discount > 0:
+                    invoice.add_discount_line(discount_percent, invoice_discount)
 
-            distributed_amount += invoice_discount
+                distributed_amount += invoice_discount
+                succeeded_invoices_sudo.append(invoice)
+            except Exception as e:
+                _logger.warning(
+                    f"Add failed discount line for invoice '{invoice.name}': {e}"
+                )
+
+        return succeeded_invoices_sudo
