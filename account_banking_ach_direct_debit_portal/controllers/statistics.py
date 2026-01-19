@@ -3,6 +3,8 @@
 
 from datetime import date
 
+from psycopg2 import sql
+
 from odoo import http
 from odoo.http import request
 
@@ -11,41 +13,63 @@ from odoo.addons.portal.controllers.portal import CustomerPortal
 
 class StatisticsController(CustomerPortal):
     def _get_invoice_stats(self, date_from, date_to):
-        """Get invoice statistics for a given date range."""
-        AccountMove = request.env["account.move"].sudo()
-
-        # Base domain for customer invoices
-        base_domain = [
-            ("move_type", "=", "out_invoice"),
-            ("state", "=", "posted"),
-            ("invoice_date", ">=", date_from),
-            ("invoice_date", "<=", date_to),
-        ]
+        """Get invoice statistics for a given date range using SQL for performance."""
+        cr = request.env.cr
 
         # Total number of invoices
-        total_invoices = AccountMove.search_count(base_domain)
+        cr.execute(sql.SQL(
+            """
+                        SELECT COUNT(*)
+                        FROM account_move
+                        WHERE move_type = 'out_invoice'
+                          AND state = 'posted'
+                          AND invoice_date >= %s
+                          AND invoice_date <= %s
+                        """),
+            (date_from, date_to)
+        )
+        total_invoices = cr.fetchone()[0]
 
-        # Get all invoices in the date range
-        invoices = AccountMove.search(base_domain)
+        # Count invoices paid by ACH or CC using SQL
+        # Join through reconciliation to find payment method codes
+        cr.execute(sql.SQL(
+            """
+                        SELECT
+                            pm.code,
+                            COUNT(DISTINCT am.id) as invoice_count
+                        FROM account_move am
+                        JOIN account_move_line aml ON aml.move_id = am.id
+                        JOIN account_partial_reconcile apr ON (
+                            apr.credit_move_id = aml.id OR apr.debit_move_id = aml.id
+                        )
+                        JOIN account_move_line payment_aml ON (
+                            (apr.debit_move_id = payment_aml.id AND apr.credit_move_id = aml.id)
+                            OR (apr.credit_move_id = payment_aml.id AND apr.debit_move_id = aml.id)
+                        )
+                        JOIN account_move payment_move ON payment_move.id = payment_aml.move_id
+                        JOIN account_payment ap ON ap.move_id = payment_move.id
+                        JOIN account_payment_method_line pml ON pml.id = ap.payment_method_line_id
+                        JOIN account_payment_method pm ON pm.id = pml.payment_method_id
+                        WHERE am.move_type = 'out_invoice'
+                          AND am.state = 'posted'
+                          AND am.invoice_date >= %s
+                          AND am.invoice_date <= %s
+                          AND pm.code IN ('ACH-In', 'authorize')
+                        GROUP BY pm.code
+                        """
+        ),
+            (date_from, date_to),
+        )
 
+        results = cr.fetchall()
         cc_paid_count = 0
         ach_paid_count = 0
 
-        for invoice in invoices:
-            payments = invoice._get_reconciled_payments()
-            for payment in payments:
-                if not payment.payment_method_line_id:
-                    continue
-
-                code = payment.payment_method_line_id.code
-
-                if code == "ACH-In":
-                    ach_paid_count += 1
-                    break
-
-                if code == "authorize":
-                    cc_paid_count += 1
-                    break
+        for code, count in results:
+            if code == "ACH-In":
+                ach_paid_count = count
+            elif code == "authorize":
+                cc_paid_count = count
 
         return {
             "total": total_invoices,
@@ -54,63 +78,99 @@ class StatisticsController(CustomerPortal):
         }
 
     def _get_portal_user_stats(self):
-        """Get portal user statistics."""
-        ResUsers = request.env["res.users"].sudo()
-        ResPartner = request.env["res.partner"].sudo()
-        AccountMove = request.env["account.move"].sudo()
+        """Get portal user statistics using SQL for performance."""
+        cr = request.env.cr
+        portal_group_id = request.env.ref("base.group_portal").id
 
-        # Get all portal users
-        portal_users = ResUsers.search(
-            [("groups_id", "in", request.env.ref("base.group_portal").id)]
+        # Get total portal users count
+        cr.execute(sql.SQL(
+            """
+                        SELECT COUNT(DISTINCT ru.id)
+                        FROM res_users ru
+                        JOIN res_groups_users_rel gur ON gur.uid = ru.id
+                        WHERE gur.gid = %s
+                        """
+        ),
+            (portal_group_id,),
         )
-        total_portal_users = len(portal_users)
+        total_portal_users = cr.fetchone()[0]
 
-        # Get partner IDs for portal users
-        portal_partner_ids = portal_users.mapped("partner_id").ids
-
-        # Portal users who have used portal for at least one invoice payment
-        # (invoices paid by ACH or CC through portal)
-        used_portal_payment_count = 0
-        partners_with_portal_payment = set()
-
-        invoices = AccountMove.search(
-            [
-                ("move_type", "=", "out_invoice"),
-                ("state", "=", "posted"),
-                ("partner_id", "in", portal_partner_ids),
-                ("payment_state", "in", ("paid", "in_payment")),
-            ]
+        # Get portal partner IDs for subsequent queries
+        cr.execute(sql.SQL(
+            """
+                        SELECT DISTINCT rp.id
+                        FROM res_partner rp
+                        JOIN res_users ru ON ru.partner_id = rp.id
+                        JOIN res_groups_users_rel gur ON gur.uid = ru.id
+                        WHERE gur.gid = %s
+                        """
+        ),
+            (portal_group_id,),
         )
+        portal_partner_ids = [row[0] for row in cr.fetchall()]
 
-        for invoice in invoices:
-            if invoice.partner_id.id in partners_with_portal_payment:
-                continue
-            payments = invoice._get_reconciled_payments()
-            for payment in payments:
-                if not payment.payment_method_line_id:
-                    continue
-                code = payment.payment_method_line_id.code
-                if code in ("ACH-In", "authorize"):
-                    partners_with_portal_payment.add(invoice.partner_id.id)
-                    break
+        if not portal_partner_ids:
+            return {
+                "total": total_portal_users,
+                "used_portal_payment": 0,
+                "with_bank_account": 0,
+                "with_autopay": 0,
+            }
 
-        used_portal_payment_count = len(partners_with_portal_payment)
-
-        # Portal users with a bank account linked
-        partners_with_bank = ResPartner.search_count(
-            [
-                ("id", "in", portal_partner_ids),
-                ("bank_ids", "!=", False),
-            ]
+        # Count distinct partners who have used portal payment (ACH or CC)
+        cr.execute(sql.SQL(
+            """
+                        SELECT COUNT(DISTINCT am.partner_id)
+                        FROM account_move am
+                        JOIN account_move_line aml ON aml.move_id = am.id
+                        JOIN account_partial_reconcile apr ON (
+                            apr.credit_move_id = aml.id OR apr.debit_move_id = aml.id
+                        )
+                        JOIN account_move_line payment_aml ON (
+                            (apr.debit_move_id = payment_aml.id AND apr.credit_move_id = aml.id)
+                            OR (apr.credit_move_id = payment_aml.id AND apr.debit_move_id = aml.id)
+                        )
+                        JOIN account_move payment_move ON payment_move.id = payment_aml.move_id
+                        JOIN account_payment ap ON ap.move_id = payment_move.id
+                        JOIN account_payment_method_line pml ON pml.id = ap.payment_method_line_id
+                        JOIN account_payment_method pm ON pm.id = pml.payment_method_id
+                        WHERE am.move_type = 'out_invoice'
+                          AND am.state = 'posted'
+                          AND am.partner_id = ANY(%s)
+                          AND am.payment_state IN ('paid', 'in_payment')
+                          AND pm.code IN ('ACH-In', 'authorize')
+                        """
+        ),
+            (portal_partner_ids,),
         )
+        used_portal_payment_count = cr.fetchone()[0]
 
-        # Portal users with Autopay enabled
-        partners_with_autopay = ResPartner.search_count(
-            [
-                ("id", "in", portal_partner_ids),
-                ("autopay", "!=", "disabled"),
-            ]
+        # Count partners with bank accounts linked
+        cr.execute(sql.SQL(
+            """
+                        SELECT COUNT(DISTINCT rp.id)
+                        FROM res_partner rp
+                        JOIN res_partner_bank rpb ON rpb.partner_id = rp.id
+                        WHERE rp.id = ANY(%s)
+                        """
+        ),
+            (portal_partner_ids,),
         )
+        partners_with_bank = cr.fetchone()[0]
+
+        # Count partners with Autopay enabled
+        cr.execute(sql.SQL(
+            """
+                        SELECT COUNT(*)
+                        FROM res_partner
+                        WHERE id = ANY(%s)
+                          AND autopay IS NOT NULL
+                          AND autopay != 'disabled'
+                        """
+        ),
+            (portal_partner_ids,),
+        )
+        partners_with_autopay = cr.fetchone()[0]
 
         return {
             "total": total_portal_users,
